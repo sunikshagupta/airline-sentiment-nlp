@@ -1,148 +1,156 @@
-# Crystal Growth Environment Monitor
+# ✈ Airline Tweet Sentiment Analysis
+### End-to-end NLP project — Classical ML · Feature Engineering · Explainability · Streamlit
 
-An automated data acquisition and analysis system for monitoring environmental
-conditions during crystal growth experiments. Built to demonstrate real-time
-I2C sensor integration, serial communication, and high-throughput experimental
-workflow automation.
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://airline-sentiment-nlp-5jyhu9cmpfy9hketmnqioa.streamlit.app)
 
 ---
 
-## Overview
+## 🔴 Live Demo
+**[Try the app →](https://airline-sentiment-nlp-5jyhu9cmpfy9hketmnqioa.streamlit.app)**
 
-This project implements an end-to-end pipeline for experimental screening of
-crystal growth conditions — from hardware-level sensor acquisition to automated
-anomaly detection and report generation.
-
-**Hardware stack:**
-- Arduino (I2C master) → reads BME280 (temperature/humidity) and BH1750 (light)
-- Raspberry Pi (host controller) → receives serial data, logs and analyzes
-
-**Software stack:**
-- Arduino C (sensor polling, I2C communication, serial output)
-- Python 3 (data logging, time-series analysis, report generation)
+Type any airline tweet and get an instant sentiment prediction with confidence score and word-level explanations.
 
 ---
 
-## Architecture
+## 📌 Project Overview
+
+Built a 3-layer NLP pipeline to classify 14,640 real tweets about US airlines as **positive**, **negative**, or **neutral**.
+
+| Layer | Approach | Accuracy |
+|-------|----------|----------|
+| Layer 1 | Classical ML (TF-IDF + 5 models) | ~80% |
+| Layer 2 | Transformer (Twitter-RoBERTa) | ~85% *(coming soon)* |
+| Layer 3 | LLM zero-shot (GPT-4o-mini) | ~82% *(coming soon)* |
+
+---
+
+## 📊 Key Findings
+
+- **63%** of airline tweets are negative — Twitter skews toward complaints
+- **US Airways** has the highest negative rate at 78%
+- **Virgin America** is the most balanced airline at 36% negative
+- Top complaint: **Customer Service Issue** (2,910 tweets)
+- Negative tweets average **18 words** vs 12.5 for positive — complaints are more detailed
+- **Neutral class** is hardest to classify (~65% F1) due to vocabulary overlap with negative
+
+---
+
+## 🏗 Project Structure
 
 ```
-┌───────────────────────────────────────┐
-│            Arduino (I2C Master)        │
-│                                       │
-│  BME280 (0x76) ──┐                    │
-│                  ├─ I2C Bus ──► Sketch │
-│  BH1750 (0x23) ──┘            │       │
-│                                ▼      │
-│              Serial (9600 baud) ──────┼──► Raspberry Pi
-└───────────────────────────────────────┘         │
-                                                   ▼
-                                        crystal_logger.py
-                                        (CSV data logging)
-                                                   │
-                                                   ▼
-                                       crystal_analysis.py
-                                  (statistics, anomaly detection,
-                                        HTML report)
+airline-sentiment-nlp/
+├── notebooks/
+│   ├── 00_data_cleaning.ipynb        # Missing values, stopwords, lemmatization
+│   ├── 01_EDA.ipynb                  # Temporal analysis, vocabulary overlap, correlation
+│   ├── 02_feature_engineering.ipynb  # BoW vs TF-IDF vs Word2Vec comparison
+│   └── 03_modelling.ipynb            # 5 models, CV, grid search, SHAP, error analysis
+├── src/
+│   ├── preprocessing.py              # Full cleaning pipeline
+│   ├── eda.py                        # EDA chart generation
+│   └── models.py                     # Model training scripts
+├── outputs/                          # Saved models, charts, evaluation results
+├── app.py                            # Streamlit web application
+├── setup_models.py                   # Train and save models for the app
+└── requirements.txt
 ```
 
 ---
 
-## Files
+## 🔬 Methodology
 
-| File | Description |
-|---|---|
-| `crystal_monitor.ino` | Arduino sketch — I2C sensor polling, serial output |
-| `crystal_logger.py`   | Python data logger — serial reader, CSV writer |
-| `crystal_analysis.py` | Analysis script — plots, anomaly detection, HTML report |
+### Data Cleaning
+- Removed @mentions, URLs, RT markers, hashtag symbols
+- Kept exclamation marks (sentiment signal)
+- Custom stopword list preserving negation words (not, no, never)
+- Lemmatization over stemming for interpretability
+
+### Feature Engineering
+Compared three approaches:
+
+| Method | Accuracy | Dimensions | Notes |
+|--------|----------|------------|-------|
+| Bag of Words | 78.8% | 15,000 | Fast, ignores word importance |
+| TF-IDF | 78.5% | 15,000 | Best classical approach |
+| Word2Vec | — | 100 | Limited by small corpus |
+
+### Models Trained
+
+| Model | Test Accuracy | Test F1 |
+|-------|--------------|---------|
+| Naive Bayes | 76.1% | 74.8% |
+| Logistic Regression | 79.2% | 79.6% |
+| LinearSVC | 80.5% | 79.6% |
+| Random Forest | 77.8% | 76.9% |
+| XGBoost | 79.2% | 78.1% |
+
+### Explainability
+Used **SHAP (SHapley Additive exPlanations)** to identify which words drive each prediction:
+- Negative drivers: *cancelled, delayed, hold, terrible, worst*
+- Positive drivers: *thank, great, amazing, love, awesome*
+- Neutral is hardest — vocabulary overlaps heavily with negative class
+
+### Class Imbalance
+- Dataset: 63% negative / 21% neutral / 16% positive
+- Strategy: `class_weight='balanced'` in all models
+- Tested SMOTE oversampling — found it hurts performance on sparse TF-IDF vectors
 
 ---
 
-## Quick Start
+## 📈 Business Impact
 
-### Simulation mode (no hardware required)
+At 10,000 tweets/day with 85.3% recall on negatives:
+- **8,530** complaints correctly flagged per day
+- **1,470** missed complaints requiring human review
+- Saves ~**$600/day** vs manual review at 500 tweets/hour @ $30/hr
+
+---
+
+## 🚀 Run Locally
 
 ```bash
+# Clone the repository
+git clone https://github.com/sunikshagupta/airline-sentiment-nlp.git
+cd airline-sentiment-nlp
+
+# Create virtual environment
+python -m venv nlp-env
+nlp-env\Scripts\activate  # Windows
+# source nlp-env/bin/activate  # Mac/Linux
+
 # Install dependencies
-pip install pyserial pandas matplotlib
+pip install -r requirements.txt
 
-# Run logger in simulation mode for 10 minutes
-python crystal_logger.py --simulate --duration 600
+# Download NLTK data
+python -c "import nltk; nltk.download('stopwords'); nltk.download('wordnet')"
 
-# Analyze the output and generate a report
-python crystal_analysis.py --input logs/crystal_run_<timestamp>.csv --report
-```
+# Download dataset from Kaggle
+# https://www.kaggle.com/datasets/crowdflower/twitter-airline-sentiment
+# Place Tweets.csv in data/
 
-### With real hardware (Raspberry Pi + Arduino)
+# Run preprocessing and train models
+python src/preprocessing.py
+python setup_models.py
 
-```bash
-# Connect Arduino via USB, identify port
-ls /dev/tty*          # Linux/macOS
-# or check Device Manager on Windows
-
-# Run logger
-python crystal_logger.py --port /dev/ttyUSB0 --duration 3600
-
-# Analyze
-python crystal_analysis.py --input logs/crystal_run_<timestamp>.csv --report
+# Launch the app
+streamlit run app.py
 ```
 
 ---
 
-## Sensor Configuration
+## 🛠 Tech Stack
 
-| Sensor | Parameter | I2C Address | Interface |
-|---|---|---|---|
-| BME280 | Temperature (°C), Humidity (%RH) | 0x76 | I2C |
-| BH1750 | Illuminance (lux) | 0x23 | I2C |
-
-To swap in real sensors, replace the simulation block in `crystal_monitor.ino`
-with the appropriate sensor library calls (Adafruit BME280, BH1750FVI).
+`Python` `Pandas` `Scikit-learn` `XGBoost` `SHAP` `NLTK` `Streamlit` `Matplotlib` `Seaborn` `WordCloud`
 
 ---
 
-## Anomaly Detection
+## 👩‍💻 Author
 
-The analysis pipeline uses a **rolling z-score** method to flag environmental
-deviations that could indicate:
-- Crystallization onset (temperature/humidity shifts)
-- Equipment fluctuations
-- External disturbances
+**Suniksha Gupta, PhD**
+Data Scientist | NLP | Machine Learning | Python
 
-Default parameters: window = 10 readings, threshold = 2.5σ. Both are
-configurable in `crystal_analysis.py`.
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://www.linkedin.com/in/suniksha-gupta)
+[![GitHub](https://img.shields.io/badge/GitHub-Follow-black)](https://github.com/sunikshagupta)
 
 ---
 
-## Output
-
-- **`logs/crystal_run_<timestamp>.csv`** — raw time-series data
-- **`logs/environment_plot.png`** — three-panel time-series plot with anomaly markers
-- **`logs/report.html`** — full summary report with statistics and embedded plot
-
----
-
-## Extending This Project
-
-- Add HPLC or UV-Vis spectrometer output parsing
-- Integrate motion control (stepper motor) for automated crystal stage positioning
-- Connect to a LabVIEW DAQ system via serial bridge
-- Add nucleation event detection using optical density thresholding
-
----
-
-## Requirements
-
-```
-pyserial>=3.5
-pandas>=1.3
-matplotlib>=3.4
-```
-
----
-
-## Background
-
-Developed as part of an automated experimental screening workflow for
-optoelectronic material characterization. Designed for extensibility —
-the serial/I2C abstraction layer makes it straightforward to swap simulated
-data for real sensors or integrate additional analytical instruments.
+*Part of an ongoing NLP project series. Layer 2 (Transformer) and Layer 3 (LLM zero-shot) coming soon.*
