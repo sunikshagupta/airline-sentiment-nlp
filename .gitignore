@@ -1,0 +1,13 @@
+nlp-env/ 
+__pycache__/ 
+*.pyc 
+.ipynb_checkpoints/ 
+data/Tweets.csv 
+data/database.sqlite 
+data/archive* 
+outputs/tfidf_svc_model.pkl 
+outputs/tfidf_lr_model.pkl 
+outputs/w2v_model.pkl 
+outputs/best_lr_gridsearch.pkl 
+outputs/bow_vectorizer.pkl 
+Thumbs.db 
