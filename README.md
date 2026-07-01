@@ -12,6 +12,14 @@ Type any airline tweet and get an instant sentiment prediction with confidence s
 
 ---
 
+## 📥 Batch CSV Classification
+
+The Streamlit app also accepts a CSV upload in the **Live Classifier** tab. Use it to classify many tweets without editing the bundled dataset.
+
+Supported tweet text columns are `text`, `tweet`, `tweet_text`, `full_text`, `content`, `body`, and `Tweets`. Uploads are limited to 2 MB and 5000 rows, and predictions can be downloaded as a CSV.
+
+---
+
 ## 📌 Project Overview
 
 Built a 3-layer NLP pipeline to classify 14,640 real tweets about US airlines as **positive**, **negative**, or **neutral**.

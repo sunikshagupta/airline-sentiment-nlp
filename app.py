@@ -37,6 +37,9 @@ PALETTE = {
 }
 LABEL_NAMES = ["negative", "neutral", "positive"]
 EMOJI = {"negative": "😡", "neutral": "😐", "positive": "😊"}
+TEXT_COLUMNS = ("text", "tweet", "tweet_text", "full_text", "content", "body", "Tweets")
+MAX_UPLOAD_BYTES = 2 * 1024 * 1024
+MAX_CSV_ROWS = 5000
 
 # ── Load models ───────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -84,6 +87,42 @@ def clean_and_lemmatize(text: str, custom_stops, lemmatizer) -> str:
     text = re.sub(r"\s+",        " ", text).strip().lower()
     return " ".join([lemmatizer.lemmatize(w) for w in text.split()
                      if w not in custom_stops])
+
+def first_existing_column(columns, candidates):
+    normalized_columns = {str(column).strip().lower(): column for column in columns}
+    for candidate in candidates:
+        column = normalized_columns.get(candidate.lower())
+        if column is not None:
+            return column
+    return None
+
+def read_uploaded_tweets(uploaded_file):
+    if uploaded_file.size > MAX_UPLOAD_BYTES:
+        raise ValueError("CSV file is too large. Upload a file under 2 MB.")
+    try:
+        uploaded_data = pd.read_csv(uploaded_file, nrows=MAX_CSV_ROWS + 1)
+    except (pd.errors.EmptyDataError, pd.errors.ParserError, UnicodeDecodeError) as error:
+        raise ValueError("Could not read the CSV. Upload a valid UTF-8 CSV file.") from error
+    if len(uploaded_data) > MAX_CSV_ROWS:
+        raise ValueError("CSV row limit is 5000 rows. Upload a smaller file.")
+
+    text_column = first_existing_column(uploaded_data.columns, TEXT_COLUMNS)
+    if text_column is None:
+        raise ValueError("CSV must include a text, tweet, tweet_text, full_text, content, body, or Tweets column.")
+    return uploaded_data, text_column
+
+def classify_tweets(uploaded_data, text_column, model, tfidf, custom_stops, lemmatizer):
+    results = uploaded_data.copy()
+    tweet_text = results[text_column].fillna("").astype(str)
+    cleaned_text = [clean_and_lemmatize(text, custom_stops, lemmatizer) for text in tweet_text]
+    vectors = tfidf.transform(cleaned_text)
+    predictions = model.predict(vectors)
+
+    results["predicted_sentiment"] = [LABEL_NAMES[prediction] for prediction in predictions]
+    if hasattr(model, "predict_proba"):
+        probabilities = model.predict_proba(vectors)
+        results["confidence"] = probabilities.max(axis=1).round(4)
+    return results
 
 # ── SHAP explanation ──────────────────────────────────────────────────────────
 def get_shap_words(text_vec, lr_model, tfidf, pred_class, top_n=10):
@@ -257,6 +296,34 @@ with tab1:
                 plt.close()
 
                 st.caption("Red bars = words pushing toward the predicted class · Green bars = words pushing away")
+
+    st.markdown("---")
+    st.markdown("### Batch CSV Classifier")
+    st.markdown("Upload a CSV to classify many tweets with the selected model.")
+
+    uploaded_file = st.file_uploader(
+        "Upload tweet CSV",
+        type=["csv"],
+        help="Use text, tweet, tweet_text, full_text, content, body, or Tweets for tweet text.",
+    )
+    if uploaded_file is not None:
+        try:
+            uploaded_data, text_column = read_uploaded_tweets(uploaded_file)
+            batch_results = classify_tweets(uploaded_data, text_column, model, tfidf, custom_stops, lemmatizer)
+        except ValueError as error:
+            st.error(str(error))
+        else:
+            st.success(f"Classified {len(batch_results):,} rows using `{text_column}`.")
+            preview_columns = [text_column, "predicted_sentiment"]
+            if "confidence" in batch_results.columns:
+                preview_columns.append("confidence")
+            st.dataframe(batch_results[preview_columns].head(50), use_container_width=True)
+            st.download_button(
+                "Download predictions as CSV",
+                data=batch_results.to_csv(index=False),
+                file_name="tweet_sentiment_predictions.csv",
+                mime="text/csv",
+            )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 2 — AIRLINE INSIGHTS
